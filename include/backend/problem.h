@@ -130,6 +130,18 @@ namespace vio {
 			///time to solve
 			double t_hessian_cost_ = 0.0;
 			double t_PCG_cost_ = 0.0;
+
+			///dog_leg法所需参数
+			enum Hdl{Hgn,Hsd,Hgn_sd};
+			Hdl Hdl_choose_;
+			///hsd_ = J^T * f
+			VecX hsd_;
+			VecX hgn_;
+			///Hdl的第三项系数
+			double beta_;
+			///最速梯度的步长因子
+			double alpha_;
+
 		};
 	}
 }
