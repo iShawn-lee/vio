@@ -25,8 +25,8 @@ namespace vio {
 			// " problem::LogoutVectorSize verticies_:" << verticies_.size() <<
 			// " edges:" << edges_.size();
 		}
-		
-		Problem::Problem()  {
+
+		Problem::Problem() {
 			LogoutVectorSize();
 			verticies_marg_.clear();
 		}
@@ -34,7 +34,7 @@ namespace vio {
 		Problem::~Problem() {
 			global_vertex_id = 0;
 		}
-		
+
 		void Problem::ExtendHessiansPriorSize(int dim)
 		{
 			int size = H_prior_.rows() + dim;
@@ -351,20 +351,20 @@ namespace vio {
 				H_pp_schur_(i, i) += currentLambda_;              // LM Method
 			}
 
-				// TicToc t_linearsolver;
-				delta_x_pp = H_pp_schur_.ldlt().solve(b_pp_schur_);//  SVec.asDiagonal() * svd.matrixV() * Ub;    
-				delta_x_.head(reserve_size) = delta_x_pp;
-				// std::cout << " Linear Solver Time Cost: " << t_linearsolver.toc() << std::endl;
+			// TicToc t_linearsolver;
+			delta_x_pp = H_pp_schur_.ldlt().solve(b_pp_schur_);//  SVec.asDiagonal() * svd.matrixV() * Ub;    
+			delta_x_.head(reserve_size) = delta_x_pp;
+			// std::cout << " Linear Solver Time Cost: " << t_linearsolver.toc() << std::endl;
 
-				// step3: solve Hmm * delta_x = bmm - Hmp * delta_x_pp;
-				VecX delta_x_ll(marg_size);
-				delta_x_ll = Hmm_inv * (bmm - Hmp * delta_x_pp);
-				delta_x_.tail(marg_size) = delta_x_ll;
+			// step3: solve Hmm * delta_x = bmm - Hmp * delta_x_pp;
+			VecX delta_x_ll(marg_size);
+			delta_x_ll = Hmm_inv * (bmm - Hmp * delta_x_pp);
+			delta_x_.tail(marg_size) = delta_x_ll;
 
-				//        std::cout << "schur time cost: "<< t_Hmminv.toc()<<std::endl;
-			}
-
+			//        std::cout << "schur time cost: "<< t_Hmminv.toc()<<std::endl;
 		}
+
+
 
 		void Problem::UpdateStates() {
 
@@ -386,7 +386,7 @@ namespace vio {
 
 				/// prior Jacobian update with first order Taylor, b' = b + H * delta x
 				/// \delta x = Computes the linearized deviation from the references (linearization points)
-				b_prior_ -= H_prior_ * delta_x_.head(ordering_poses_);       
+				b_prior_ -= H_prior_ * delta_x_.head(ordering_poses_);
 				err_prior_ = -Jt_prior_inv_ * b_prior_.head(ordering_poses_ - 15); //????????-15
 
 				//        std::cout << "                : "<< b_prior_.norm()<<" " <<err_prior_.norm()<< std::endl;
@@ -467,18 +467,18 @@ namespace vio {
 				while (!oneStepSuccess && false_cnt < 10)  // 不断尝试不同的Lambda, 直到成功迭代一步
 				{
 					// 在solveliner那步加了，暂时不用addlambda
-		            //AddLambdatoHessianLM();
+					//AddLambdatoHessianLM();
 					// 第四步，解线性方程
 					SolveLinearSystem();
-		            //RemoveLambdaHessianLM();
+					//RemoveLambdaHessianLM();
 
 					// 优化退出条件1： delta_x_ 很小则退出
-		            if (delta_x_.squaredNorm() <= 1e-6 || false_cnt > 10)
-					// TODO:: 退出条件有问题, 好多次误差都没变化了还在迭代计算，应该搞一个误差不变了就中止
-		            {
-		                stop = true;
-		                break;
-		            }
+					if (delta_x_.squaredNorm() <= 1e-6 || false_cnt > 10)
+						// TODO:: 退出条件有问题, 好多次误差都没变化了还在迭代计算，应该搞一个误差不变了就中止
+					{
+						stop = true;
+						break;
+					}
 
 					// 更新状态量
 					UpdateStates();
@@ -486,9 +486,9 @@ namespace vio {
 					oneStepSuccess = IsGoodStepInLM();
 					// 后续处理，
 					if (oneStepSuccess) {
-					//  std::cout << " get one step success\n";
+						//  std::cout << " get one step success\n";
 
-					// 在新线性化点 构建 hessian
+						// 在新线性化点 构建 hessian
 						MakeHessian();
 
 						false_cnt = 0;
@@ -571,10 +571,10 @@ namespace vio {
 						MatXX hessian = jacobian_i.transpose() * robustInfo * jacobian_j;
 
 						assert(hessian.rows() == v_i->LocalDimension() && hessian.cols() == v_j->LocalDimension());
-						
+
 						H_marg.block(index_i, index_j, dim_i, dim_j) += hessian;
 						if (j != i) {
-							
+
 							H_marg.block(index_j, index_i, dim_j, dim_i) += hessian.transpose();
 						}
 					}
@@ -650,7 +650,7 @@ namespace vio {
 
 			double eps = 1e-8;
 			int m2 = marg_dim;  // marg pose
-			int n2 = reserve_size - marg_dim;   
+			int n2 = reserve_size - marg_dim;
 			///实对称阵保证可以进行特征值分解
 			Eigen::MatrixXd Amm = 0.5 * (H_marg.block(n2, n2, m2, m2) + H_marg.block(n2, n2, m2, m2).transpose());
 			///特征值分解
@@ -704,8 +704,271 @@ namespace vio {
 
 		}
 
+		/*
 		//dogleg法
+		bool Problem::Solve(int iterations) {
 
+			if (edges_.size() == 0 || verticies_.size() == 0) {
+				std::cerr << "\nCannot solve problem without edges or verticies" << std::endl;
+				return false;
+			}
 
+			TicToc t_solve;
+			double e1 = 1e-6;
+			double e2 = 1e-6;
+			double e3 = 1e-6;
+			bool stop = false;
+
+			SetOrdering();
+			// 计算最速下降法方向hsd_和系数alpha_,以及高斯牛顿法的增量方程H
+			Cal_pre_hdl();
+			//计算得到高斯牛顿法的步长,和LM法不同之处，失败后不需要再更新并重新解算正规方程
+			SolveDlLinearSystem();
+
+			int iter = 0;
+			double last_chi_ = 1e15;
+			double currentChi_ = 0;
+			double radius = 1.0;
+
+			while (!stop && iter < iterations) {
+				bool oneStepSuccess = false;
+				int false_cnt = 0;
+				//判断rho的值是否符合要求，相应更改阈值范围
+				while (!oneStepSuccess && false_cnt < 10)
+				{
+					// 根据上步求出的hsd和hgn确定当前步的优化方向hdl
+					FindHdl(radius);
+
+					UpdateStates();
+					// 判断当前步是否可行以及dog-leg的阈值更新,更新误差
+					oneStepSuccess = IsGoodStepInDL(radius，stop);
+
+					if (oneStepSuccess) {
+						//std::cout << " get one step success\n";
+						// 计算新的优化方向
+						Cal_pre_hdl();
+						SolveLinearSystem();
+
+						false_cnt = 0;
+						// 优化退出4： 误差变化足够小
+						if (last_chi_ - currentChi_ <= e3)
+						{
+							std::cout << "The algorithm convergence has been found with small error change" << std::endl;
+							stop = true;
+						}
+					}
+					else {
+						false_cnt++;
+						RollbackStates();   // 误差没下降，回滚
+					}
+				}
+				//std::cout << "iter: " << iter << " , chi= " << currentChi_ << std::endl;
+
+				last_chi_ = currentChi_;
+				iter++;
+			}
+			std::cout << "problem solve cost: " << t_solve.toc() << " ms" << std::endl;
+			t_hessian_cost_ = 0.;
+			return true;
+		}
+
+		void Problem::Cal_pre_hdl() {
+			TicToc t_h;
+			ulong size = ordering_generic_;
+
+			VecX b(VecX::Zero(size));
+			MatXX H(MatXX::Zero(size, size));
+
+			int size_J = 0;
+			///统计残差项的数目
+			for (auto &edge : edges_) {
+				size_J += edge.second->Residual().size();
+			}
+
+			VecX J(MatXX::Zero(size_J, size));
+			VecX Jg(VecX::Zero(size_J));
+
+			int ordering_J=0;
+			for (auto &edge : edges_) {
+
+				edge.second->ComputeResidual();
+				edge.second->ComputeJacobians();
+
+				auto jacobians = edge.second->Jacobians();
+				auto verticies = edge.second->Verticies();
+				assert(jacobians.size() == verticies.size());
+
+				for (size_t i = 0; i < verticies.size(); ++i) {
+					auto v_i = verticies[i];
+					if (v_i->IsFixed()) continue;    
+
+					auto jacobian_i = jacobians[i];
+					ulong index_i = v_i->OrderingId();
+					ulong dim_i = v_i->LocalDimension();
+
+					///给
+					J.block(ordering_J, index_i, edge.second->Residual().size(), dim_i) = jacobian_i;
+
+					double drho;
+					MatXX robustInfo(edge.second->Information().rows(), edge.second->Information().cols());
+					edge.second->RobustInfo(drho, robustInfo);
+
+					MatXX JtW = jacobian_i.transpose()* robustInfo;
+					//利用对称性质赋值
+					for (size_t j = i; j < verticies.size(); ++j) {
+						auto v_j = verticies[j];
+						auto jacobian_j = jacobians[j];
+						ulong index_j = v_j->OrderingId();
+						ulong dim_j = v_j->LocalDimension();
+
+						assert(v_j->OrderingId() != -1);
+						MatXX hessian = JtW * jacobian_j;
+
+						// 所有的信息矩阵叠加起来
+						H.block(index_i, index_j, dim_i, dim_j).noalias() += hessian;
+						if (j != i) {
+							// 对称的下三角
+							H.block(index_j, index_i, dim_j, dim_i).noalias() += hessian.transpose();
+						}
+					}
+					b.segment(index_i, dim_i).noalias() -= jacobian_i.transpose() * edge.second->Residual();
+				}
+				ordering_J += edge.
+			}
+			Hessian_ = H;
+			b_ = b;
+			hsd_ = b;
+
+			Jg = (J * hsd_).squaredNorm();
+
+			alpha_ = hsd_.squaredNorm() / Jg.squaredNorm();
+			t_hdl_cost_ += t_h.toc();
+
+			hgn_ = VecX::Zero(size);  // initial hgn_x = 0_n;
+		}
+
+		void Problem::FindHdl(const double radius) {
+			if (hgn_.norm() <= radius) {
+				delta_x_ = hgn_;
+				Hdl_choose_ = Hgn;
+			}
+			else if (hsd_.norm() >= radius){
+				delta_x_ = hsd_ * (radius / hsd_.norm());
+				Hdl_choose_ = Hsd;
+			}
+			else {
+				double c = alpha_ * hsd_.transpose() * (hgn_ - alpha_ * hsd_);
+				if (c < 0 || c == 0) {
+					beta_ = (sqrt(c*c + (hgn_ - alpha_ * hsd_).squaredNorm() * ((radius*radius) - (alpha_ * hsd_).squaredNorm())) - c) / (hgn_ - alpha_ * hsd_).squaredNorm();
+				}
+				else {
+					beta_ = (radius*radius - (alpha_ * hsd_).squaredNorm())/(sqrt(c*c + (hgn_ - alpha_ * hsd_).squaredNorm() * ((radius*radius) - (alpha_ * hsd_).squaredNorm())) + c);
+				}
+				delta_x_ = alpha_ * hsd_ + beta_ * (hgn_ - alpha * hsd_);
+				Hdl_choose_ = Hgn_sd;
+			}
+		}
+
+		bool Problem::IsGoodStepInDL(double& radius, bool& stop) {
+			double scale = 0;
+
+			// recompute residuals after update state
+			double tempChi = 0.0;
+			for (auto edge : edges_) {
+				edge.second->ComputeResidual();
+				tempChi += edge.second->RobustChi2();
+			}
+			if (err_prior_.size() > 0)
+				tempChi += err_prior_.norm();
+			tempChi *= 0.5;          // 1/2 * err^2
+
+			if (Hdl_choose_ == Hgn) {
+				scale = tempChi;
+				scale += 1e-6;    // make sure it's non-zero :)
+			}
+			else if (Hdl_choose_ == Hsd) {
+				scale = radius * (2 * alpha_*hsd_ - radius) / (2 * alpha_);
+				scale += 1e-6;
+			}
+			else {
+				scale = alpha_ * pow((1 - beta_), 2) * hsd_.squaredNorm() + beta_ * (2 - beta_)*tempChi;
+				scale += 1e-6;
+			}
+
+			double rho = (currentChi_ - tempChi) / scale;
+			if (rho > 0 && isfinite(tempChi))   // last step was good, 误差在下降
+			{
+				//退出条件1，最速梯度模足够小
+				if (hsd_.norm() <= e1)
+				{
+					std::cout << "The algorithm convergence has been found with small hsd_" << std::endl;
+					stop = true;
+				}
+				//退出条件2，步长足够小
+				if (delta_x_.norm() <= e1)
+				{
+					std::cout << "The algorithm convergence has been found with small delta_x_" << std::endl;
+					stop = true;
+				}
+				if (rho > 0.75) {
+					radius = std::max(radius, 3.0 * delta_x_.norm());
+				}
+				else if (rho < 0.25) {
+					radius /= 2.0;
+					//退出条件3，阈值足够小
+					if (radius < e3) {
+						stop = true;
+					}
+				}
+				currentChi_ = tempChi;
+				return true;
+			}
+			else {
+				radius /= 2.0;
+				return false;
+			}
+		}
+
+		void Problem::SolveDlLinearSystem() {
+
+			//  TicToc t_Hmminv;
+			// step1: schur marginalization --> Hpp, bpp
+			int reserve_size = ordering_poses_;
+			int marg_size = ordering_landmarks_;
+			MatXX Hmm = Hessian_.block(reserve_size, reserve_size, marg_size, marg_size);
+			MatXX Hpm = Hessian_.block(0, reserve_size, reserve_size, marg_size);
+			MatXX Hmp = Hessian_.block(reserve_size, 0, marg_size, reserve_size);
+			VecX bpp = b_.segment(0, reserve_size);
+			VecX bmm = b_.segment(reserve_size, marg_size);
+
+			MatXX Hmm_inv(MatXX::Zero(marg_size, marg_size));
+			// TODO:: use openMP
+			for (auto landmarkVertex : idx_landmark_vertices_) {
+				int idx = landmarkVertex.second->OrderingId() - reserve_size;
+				int size = landmarkVertex.second->LocalDimension();
+				Hmm_inv.block(idx, idx, size, size) = Hmm.block(idx, idx, size, size).inverse();
+			}
+
+			MatXX tempH = Hpm * Hmm_inv;
+			H_pp_schur_ = Hessian_.block(0, 0, ordering_poses_, ordering_poses_) - tempH * Hmp;
+			b_pp_schur_ = bpp - tempH * bmm;
+
+			// step2: solve Hpp * hgn_x = bpp
+			VecX hgn_pp(VecX::Zero(reserve_size));
+
+			// TicToc t_linearsolver;
+			hgn_pp = H_pp_schur_.ldlt().solve(b_pp_schur_);//  SVec.asDiagonal() * svd.matrixV() * Ub;    
+			hgn_.head(reserve_size) = hgn_pp;
+			// std::cout << " Linear Solver Time Cost: " << t_linearsolver.toc() << std::endl;
+
+			// step3: solve Hmm * hgn_x = bmm - Hmp * hgn_x_pp;
+			VecX hgn_x_ll(marg_size);
+			hgn_ll = Hmm_inv * (bmm - Hmp * hgnpp);
+			hgn_.tail(marg_size) = hgn_ll;
+
+			//        std::cout << "schur time cost: "<< t_Hmminv.toc()<<std::endl;
+		}
+
+		*/
 	}
 }
