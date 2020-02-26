@@ -191,10 +191,9 @@ namespace vio {
 			MatXX H(MatXX::Zero(size, size));
 			VecX b(VecX::Zero(size));
 
-			//TODO:加速！！！！！！
-			//#ifdef USE_OPENMP
-			//#pragma omp parallel for
-			//#endif
+			#ifdef USE_OPENMP
+			#pragma omp parallel for num_threads(4)
+			#endif
 			for (auto &edge : edges_) {
 
 				edge.second->ComputeResidual();
@@ -596,7 +595,8 @@ namespace vio {
 
 				/// 和前面的对角线求逆一样
 				MatXX Hmm_inv(MatXX::Zero(marg_size, marg_size));
-				// TODO:: use openMP
+				
+				TODO:accelerate
 				for (auto iter : margLandmark) {
 					int idx = iter.second->OrderingId() - reserve_size;
 					int size = iter.second->LocalDimension();
@@ -606,7 +606,7 @@ namespace vio {
 				MatXX tempH = Hpm * Hmm_inv;
 				MatXX Hpp = H_marg.block(0, 0, reserve_size, reserve_size) - tempH * Hmp;
 				bpp = bpp - tempH * bmm;
-				//直接赋值？？？？改变矩阵大小
+
 				H_marg = Hpp;
 				b_marg = bpp;
 			}
@@ -789,6 +789,9 @@ namespace vio {
 			VecX Jg(VecX::Zero(size_J));
 
 			int ordering_J=0;
+			#ifdef USE_OPENMP
+			#pragma omp parallel for num_threads(4)
+			#endif
 			for (auto &edge : edges_) {
 
 				edge.second->ComputeResidual();
@@ -806,7 +809,7 @@ namespace vio {
 					ulong index_i = v_i->OrderingId();
 					ulong dim_i = v_i->LocalDimension();
 
-					///给
+					
 					J.block(ordering_J, index_i, edge.second->Residual().size(), dim_i) = jacobian_i;
 
 					double drho;
